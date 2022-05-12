@@ -29,12 +29,14 @@
 #define eveningHour 23
 #define eveningMinute 0
 #define eveningSecond 0
-#define freezingTemp 0
+
 #define measureBufferSize 10
 #define displayLength 16
 #define displayRows 2
 
-#define scheduleHour 6
+#define freezingTemp 0
+
+#define scheduleHour 22
 #define scheduleMinute 15
 #define scheduleSecond 0
 
@@ -55,27 +57,31 @@ DS3231 rtc;
 // vytvoření proměnné pro práci s časem
 RTCDateTime datumCas;
 
-  int distanceReadings [measureBufferSize];
-  int distanceAverage;
+  long distanceReadings [measureBufferSize];
+  long distanceAverage;
   int lastSecond = 0;
   int arrayIndex = 0;
   int lastState = 0;
   int initCycle = displayLength;
   int currentTemp;
-  String statusText;
+  char statusText;
   int releMode;
-  int currentSec;
-  int stopSec;
+  long currentSec;
+  long stopSec;
   int tempBlocker = 0;
   int permBlocker = 0;
   int drainer = 0;
-  int morningSec=morningHour*3600+morningMinute*60+morningSecond;
-  int eveningSec=eveningHour*3600+eveningMinute*60+eveningSecond;
-  int scheduleSec=scheduleHour*3600+scheduleMinute*60+scheduleSecond;
-  int waterLevel;
-  int waterAmount;
-  int waterLevelPerc;
-  int blockerEnd;
+  long morningSec=static_cast<long>(morningHour)*3600+morningMinute*60+morningSecond;
+  long eveningSec=static_cast<long>(eveningHour)*3600+eveningMinute*60+eveningSecond;
+  long scheduleSec=static_cast<long>(scheduleHour)*3600+scheduleMinute*60+scheduleSecond;
+  long waterLevel;
+  long waterAmount;
+  long waterLevelPerc;
+  long blockerEnd;
+
+  long minS = 1000;
+  long maxS = 0;
+  
   int blocker;
 
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
@@ -104,14 +110,14 @@ void setup() {
   lcd.setCursor ( 0, 0 );  
   if (! sht4.begin()) 
   {
-    lcd.print ("SHT4x not found");
-    Serial.println("SHT4x not found");
+    lcd.print ("Thermo not found");
+    Serial.println("Thermo not found");
     Serial.println("Check the connection");
-    delay(1000);
+    delay(2000);
   } else {
-    lcd.print ("SHT4x found! OK.");
-    Serial.println("SHT4x found");
-    delay(1000);
+    lcd.print ("Thermo found! OK.");
+    Serial.println("Thermo found");
+    delay(500);
   }
   lcd.clear();
 
@@ -157,23 +163,31 @@ void loop() {
       distanceAverage += distanceReadings [i];
     }
     distanceAverage = distanceAverage / measureBufferSize;
+    if (minS > distanceAverage) {
+      minS = distanceAverage;
+    }
+
+    if (maxS < distanceAverage) {
+      maxS = distanceAverage;
+    }
+
     currentTemp = static_cast<int>(temp.temperature);
-    currentSec = datumCas.hour * 3600 + datumCas.minute * 60 + datumCas.second;
+    currentSec = static_cast<long>(datumCas.hour) * 3600 + datumCas.minute * 60 + datumCas.second;
     waterLevel = totalWaterDepth - (distanceAverage - zeroLevelDepth);
     waterAmount = static_cast<int> (cmVolume * (waterLevel - minWaterDepth));
     if ( waterAmount < 0 ) { 
       waterAmount = 0;
     }
-    waterLevelPerc = static_cast<int> (waterLevel / totalWaterDepth * 100) ;
+    waterLevelPerc = static_cast<long> (waterLevel * 100 / totalWaterDepth ) ;
 ////////////////////////////////////////////    
 // Evaluate status
 ////////////////////////////////////////////    
 
-    if ( waterLevel < totalWaterDepth * forcedDrainPercStop / 100 ) {
+    if ( waterLevelPerc < forcedDrainPercStop ) {
       drainer = 0;
     }
 
-    if ( waterLevel >= totalWaterDepth * forcedDrainPercStart / 100 ) {
+    if ( waterLevelPerc >= forcedDrainPercStart ) {
       drainer = 1;
     }
 
@@ -185,7 +199,7 @@ void loop() {
 
 // Freezing
     if ( currentTemp < freezingTemp ) {
-      statusText = 'OFF - Freezing!';
+      statusText = 'F';
       releMode = 0;
       blocker = 1;
       if ( blockerEnd < currentSec + freezerSec) {
@@ -194,14 +208,14 @@ void loop() {
 
 // Night
     } else if ( currentSec < morningSec || currentSec >= eveningSec ) {
-      statusText = 'OFF - Night!';
+      statusText = 'N';
       releMode = 0;
       blocker = 0;
       blockerEnd = 0;
 
 // Empty
-    } else if ( waterAmount = 0 ) {      
-      statusText = 'OFF - Empty!';
+    } else if ( waterAmount == 0 ) {      
+      statusText = 'E';
       releMode = 0;
       blocker = 1;
       if ( blockerEnd < currentSec + freezerSec) {
@@ -210,23 +224,23 @@ void loop() {
 
 // Draining
     } else if ( drainer == 1 ) {
-      statusText = 'ON - Draining!';
+      statusText = 'D';
       releMode = 1;
 
 // Watering    
-    } else if ( currentSec >= scheduleSec && scheduleSec < scheduleSec + scheduleLengthSec) {
-      statusText = 'ON - Watering!';
+    } else if ( currentSec >= scheduleSec && currentSec < scheduleSec + scheduleLengthSec) {
+      statusText = 'W';
       releMode = 1;
 
 // Idle
     } else {
-      statusText = 'OFF - idle.';
+      statusText = 'I';
       releMode = 0;
     }
 
 // BLOCKER    
     if (releMode == 1 && blocker == 1) {
-      statusText = 'OFF - blocked.';
+      statusText = 'B';
       releMode = 0;
     }
 
@@ -238,7 +252,7 @@ void loop() {
     lcd.clear();
     lcd.setCursor ( 0, 0 );
 
-    if ( currentSec % 4 < 2 ) {
+    if ( currentSec % 6 < 2 ) {
 // Print status
       if (datumCas.hour < 10) {   
         lcd.print("0");
@@ -252,28 +266,82 @@ void loop() {
         lcd.print("0");
       }
       lcd.print(datumCas.second);
+      lcd.print (" V=");
+      lcd.print (waterAmount);
+
+      
+      lcd.print("L");
       lcd.setCursor ( 0, 1 );
-      lcd.print(statusText);
-    } else {
+      if ( releMode == 0 ) {
+        lcd.print("OFF - ");
+      } else {
+        lcd.print("ON - ");
+      }
+
+      switch (statusText) {
+        case 'D':
+          lcd.print("Draining.");
+          break;
+
+        case 'E':
+          lcd.print("Empty.");
+          break;
+
+        case 'N':
+          lcd.print("Night.");
+          break;
+
+        case 'F':
+          lcd.print("Freezing.");
+          break;
+
+        case 'W':
+          lcd.print("Watering.");
+          break;
+
+        case 'B':
+          lcd.print("Blocked.");
+          break;
+
+        case 'I':
+          lcd.print("Idle.");
+          break;
+
+        default:
+          lcd.print("???.");
+          break;
+      }
+      
+    } else if ( currentSec % 6 < 4 ){
 // Print data      
       lcd.print ("CM: ");
       lcd.print(waterLevel);
       lcd.print(" s:");
       lcd.print(distanceAverage);
-      lcd.print(" ");
-      lcd.print(waterLevelPerc);
-      lcd.print("%");
 
       lcd.setCursor ( 0, 1 );
-      lcd.print ("V=");
-      lcd.print (waterAmount);
-      lcd.print ("l  Temp=");
+      lcd.print ("T=");
        if (currentTemp >= 0) {
          lcd.print ("+");
        } else {
          lcd.print ("-");
        }
-       lcd.print(currentTemp); lcd.print("C");
+      lcd.print(currentTemp); lcd.print("C");
+      lcd.print(" ");
+      lcd.print(waterLevelPerc);
+      lcd.print("%");
+       
+    } else {
+      lcd.print("Min: ");
+      lcd.print(totalWaterDepth - (maxS - zeroLevelDepth));
+      lcd.print("/");
+      lcd.print(maxS);
+      lcd.setCursor ( 0, 1 );
+      lcd.print("Max: ");
+      lcd.print(totalWaterDepth - (minS - zeroLevelDepth));
+      lcd.print("/");
+      lcd.print(minS);
+      
     }
 
 ////////////////////////////////////////////    
