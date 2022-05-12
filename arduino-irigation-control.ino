@@ -42,7 +42,7 @@
 
 #define freezerSec 300
 
-#define scheduleLengthSec 120
+#define scheduleLengthSec 300
 
 
 // inicializace měřícího modulu z knihovny PING
