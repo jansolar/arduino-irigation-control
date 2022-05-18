@@ -16,7 +16,7 @@
 #define maxVzdalenost 450
 
 // Vzdalenost sonaru od Max hladiny
-#define zeroLevelDepth 95
+#define zeroLevelDepth 40
 #define totalWaterDepth 135
 #define minWaterDepth 6
 #define cmVolume 31.4159
@@ -30,7 +30,7 @@
 #define eveningMinute 0
 #define eveningSecond 0
 
-#define measureBufferSize 10
+#define measureBufferSize 16
 #define displayLength 16
 #define displayRows 2
 
@@ -43,6 +43,8 @@
 #define freezerSec 300
 
 #define scheduleLengthSec 300
+
+#define sonarDelay 200
 
 
 // inicializace měřícího modulu z knihovny PING
@@ -99,9 +101,12 @@ void setup() {
   // přímé nastavení času pro RTC
   //rtc.setDateTime(__DATE__, "12:34:56");
 
-  // Setup Digital pin 7 output of RELAY
-  pinMode(7,OUTPUT); 
+  // Setup Digital pin output of RELAY
+  pinMode(pinRele,OUTPUT); 
 
+  // Turn off RELAY
+  digitalWrite(pinRele,HIGH);
+  
   // inicializace LCD
   lcd.begin();
   lcd.backlight();
@@ -135,7 +140,7 @@ void setup() {
     if ( i < measureBufferSize ) {
       distanceReadings [i] = sonar.ping_cm();
     }
-    delay(50);
+    delay(sonarDelay);
   }
   lcd.clear();
   // nastavení kurzoru na první znak, druhý řádek
@@ -355,7 +360,7 @@ void loop() {
     }
   }
   
-  delay(50);
+  delay(sonarDelay);
 
   arrayIndex++;
   
