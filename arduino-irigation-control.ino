@@ -30,7 +30,7 @@
 #define eveningMinute 0
 #define eveningSecond 0
 
-#define measureBufferSize 16
+#define measureBufferSize 32
 #define displayLength 16
 #define displayRows 2
 
@@ -44,7 +44,9 @@
 
 #define scheduleLengthSec 300
 
-#define sonarDelay 200
+#define sonarDelay 100
+
+#define ignoredBoundaryValues 6
 
 
 // inicializace měřícího modulu z knihovny PING
@@ -60,6 +62,8 @@ DS3231 rtc;
 RTCDateTime datumCas;
 
   long distanceReadings [measureBufferSize];
+  long sortedDistanceReadings [measureBufferSize];
+  long tempValue;
   long distanceAverage;
   int lastSecond = 0;
   int arrayIndex = 0;
@@ -83,6 +87,10 @@ RTCDateTime datumCas;
 
   long minS = 1000;
   long maxS = 0;
+
+  long minSAvg = 1000;
+  long maxSAvg = 0;
+
   
   int blocker;
 
@@ -165,16 +173,39 @@ void loop() {
     lastSecond=datumCas.second;
     distanceAverage = 0;
     for (int i = 0; i < measureBufferSize; i++) {
-      distanceAverage += distanceReadings [i];
-    }
-    distanceAverage = distanceAverage / measureBufferSize;
-    if (minS > distanceAverage) {
-      minS = distanceAverage;
+      sortedDistanceReadings[i] = distanceReadings [i];
     }
 
-    if (maxS < distanceAverage) {
-      maxS = distanceAverage;
+    for (int i = 1; i < measureBufferSize; i++) {
+      for (int j = 1; j < measureBufferSize-i; j++) {
+        if (sortedDistanceReadings[j] > sortedDistanceReadings[j+1]) {
+          tempValue = sortedDistanceReadings[j];
+          sortedDistanceReadings[j] = sortedDistanceReadings[j+1];
+          sortedDistanceReadings[j+1]=tempValue;
+        }
+      }
     }
+    
+    for (int i = ignoredBoundaryValues; i < measureBufferSize-ignoredBoundaryValues; i++) {
+      distanceAverage += sortedDistanceReadings [i];
+    }
+    distanceAverage = distanceAverage / (measureBufferSize - 2 * ignoredBoundaryValues);
+    if (minS > distanceReadings [arrayIndex]) {
+      minS = distanceReadings [arrayIndex];
+    }
+
+    if (maxS < distanceReadings [arrayIndex]) {
+      maxS = distanceReadings [arrayIndex];
+    }
+
+    if (minSAvg > distanceAverage) {
+      minSAvg = distanceAverage;
+    }
+
+    if (maxSAvg < distanceAverage) {
+      maxSAvg = distanceAverage;
+    }
+
 
     currentTemp = static_cast<int>(temp.temperature);
     currentSec = static_cast<long>(datumCas.hour) * 3600 + datumCas.minute * 60 + datumCas.second;
@@ -340,10 +371,14 @@ void loop() {
       lcd.print("Min: ");
       lcd.print(totalWaterDepth - (maxS - zeroLevelDepth));
       lcd.print("/");
+      lcd.print(maxSAvg);
+      lcd.print("/");
       lcd.print(maxS);
       lcd.setCursor ( 0, 1 );
       lcd.print("Max: ");
       lcd.print(totalWaterDepth - (minS - zeroLevelDepth));
+      lcd.print("/");
+      lcd.print(minSAvg);
       lcd.print("/");
       lcd.print(minS);
       
