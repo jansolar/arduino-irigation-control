@@ -16,8 +16,8 @@
 #define maxVzdalenost 450
 
 // Vzdalenost sonaru od Max hladiny
-#define zeroLevelDepth 40
-#define totalWaterDepth 135
+#define zeroLevelDepth 35
+#define totalWaterDepth 140
 #define minWaterDepth 6
 #define cmVolume 31.4159
 #define forcedDrainPercStart 95
