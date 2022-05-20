@@ -12,17 +12,26 @@
 #define pinEcho       4
 #define pinRele       7
 
-// Define water levels
+// Technical config
+#define measureBufferSize 32
+#define sonarDelay 100
+#define ignoredBoundaryValues 6
+#define displayLength 16
+#define displayRows 2
 #define maxVzdalenost 450
+#define errorStateMarginCM 10 //Unused so far
 
-// Vzdalenost sonaru od Max hladiny
-#define zeroLevelDepth 35
+// Water storager parameters
+#define zeroLevelDepth 35     // Vzdalenost sonaru od Max hladiny
 #define totalWaterDepth 140
 #define minWaterDepth 6
 #define cmVolume 31.4159
-#define forcedDrainPercStart 95
-#define forcedDrainPercStop 90
-#define errorStateMarginCM 10
+
+// Water draining parameters
+#define forcedDrainPercStart 90
+#define forcedDrainPercStop 80
+
+// Night
 #define morningHour 6
 #define morningMinute 0
 #define morningSecond 0
@@ -30,12 +39,9 @@
 #define eveningMinute 0
 #define eveningSecond 0
 
-#define measureBufferSize 32
-#define displayLength 16
-#define displayRows 2
-
 #define freezingTemp 0
 
+// Irigation schedule
 #define scheduleHour 22
 #define scheduleMinute 15
 #define scheduleSecond 0
@@ -43,10 +49,6 @@
 #define freezerSec 300
 
 #define scheduleLengthSec 300
-
-#define sonarDelay 100
-
-#define ignoredBoundaryValues 6
 
 
 // inicializace měřícího modulu z knihovny PING
