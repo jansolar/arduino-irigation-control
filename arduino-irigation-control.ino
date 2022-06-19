@@ -23,7 +23,7 @@
 
 #define scheduleRecords 3
 #define eventMaxRecords 20
-#define eventTypes 8
+#define eventTypes 9
 
 // Water storager parameters
 #define zeroLevelDepth 35     // Vzdalenost sonaru od Max hladiny
@@ -43,12 +43,29 @@
 #define eveningMinute 0
 #define eveningSecond 0
 
+
+
+// Afternoon + waterin
+#define minAfternoonHour 15
+#define heatThreshold 25
+#define heatThresholdAdditionPercent 100
+
+#define daysNoRainThreshold 5
+#define daysNoRainThresholdPercent 50
+#define initNoRainDaysCM 90
+
+#define waterConservationThresholdCM 50
+#define waterCriticalThresholdCM 25
+
+
 #define freezingTemp 0
 
 
 #define freezerSec 300
 
 #define scheduleLengthSec 300
+
+#define rainDetectCM 3
 
 
 // inicializace měřícího modulu z knihovny PING
@@ -75,6 +92,12 @@ int currentTemp;
 //char statusText;
 //int releMode;
 int eventCounter = 0;
+int scheduleModifier = 0;
+int maxAfternoonTemp = -100;
+int resetAfternoonTemp = 1;
+int addDaysFromRain = 1;
+int daysFromRain = -100;
+//int waterLevelAfterWatering = -100;
 int topEvent;
 int maxPriority;
 long currentSec;
@@ -86,9 +109,12 @@ long morningSec=static_cast<long>(morningHour)*3600+morningMinute*60+morningSeco
 long eveningSec=static_cast<long>(eveningHour)*3600+eveningMinute*60+eveningSecond;
 long scheduleSec;
 long waterLevel;
+long lastWaterLevel=-1;
 long waterAmount;
 long waterLevelPerc;
 long blockerEnd;
+long wateringTimeModifier;
+
 
 long minS = 1000;
 long maxS = 0;
@@ -112,6 +138,8 @@ char eventType [eventMaxRecords];
 int  eventPriority [eventMaxRecords];
 int  eventValue [eventMaxRecords];
 
+char degreeChar=223;
+
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 
 
@@ -132,8 +160,6 @@ void setBlocker(int blockerSec){
     blockerEnd = currentSec + blockerSec ;
   }
 }
-
-
 
 
 void setup() {
@@ -188,15 +214,20 @@ void setup() {
   eventPriority [5] = 50;
   eventValue [5] = 1;
 
+// Event: Rain
+  eventType [6]= 'R';
+  eventPriority [6] = 45;
+  eventValue [6] = 0;
+
 // Event: Watering schedule
-  eventType [6]= 'W';
-  eventPriority [6] = 40;
-  eventValue [6] = 1;
+  eventType [7]= 'W';
+  eventPriority [7] = 40;
+  eventValue [7] = 1;
 
 // Event: Idle
-  eventType [7]= 'I';
-  eventPriority [7] = 30;
-  eventValue [7] = 0;
+  eventType [8]= 'I';
+  eventPriority [8] = 30;
+  eventValue [8] = 0;
 
 // Set default event Idle
   setEvent ('I');
@@ -324,15 +355,82 @@ void loop() {
 // Evaluate status
 ////////////////////////////////////////////    
 
+// At the Init, if there is not enough water, then assume it did not rain at least for the threshold
+    if ( lastWaterLevel < 0  && waterLevel < initNoRainDaysCM ) {
+      daysFromRain=daysNoRainThreshold+1;
+    }
+
+
+// At the Init, assume it's one day from rain and set lastWaterLevel
+    if ( daysFromRain < 0 ) {
+      daysFromRain = 1;
+    }
+
+    if ( lastWaterLevel < 0 ) {
+      lastWaterLevel = waterLevel;
+    }
+          
+
+// Stop draining if under limit
     if ( waterLevelPerc < forcedDrainPercStop ) {
       drainer = 0;
     }
 
+// Start draining if over limit
     if ( waterLevelPerc >= forcedDrainPercStart ) {
       drainer = 1;
     }
 
+// End of blocking
     if ( blockerEnd > 0 && currentSec > blockerEnd ) {
+      blockerEnd = 0;
+    }
+
+// Rain detection
+    if (waterLevel < lastWaterLevel ) {
+      lastWaterLevel = waterLevel;
+    } else if ( waterLevel > lastWaterLevel + rainDetectCM) {
+      daysFromRain = 0;
+      lastWaterLevel=waterLevel;
+    }
+
+// Afternoon (Find max afternoon temp)
+    if ( datumCas.hour >= minAfternoonHour && currentSec < eveningSec ) {
+      if ( resetAfternoonTemp == 1 ) {
+        maxAfternoonTemp = currentTemp;
+        resetAfternoonTemp = 0;
+      } else if (currentTemp > maxAfternoonTemp) {
+        maxAfternoonTemp = currentTemp;
+      }
+    }
+
+// Calculate watering modifier
+    wateringTimeModifier = 100;
+    if ( waterLevel < waterCriticalThresholdCM ) {
+      wateringTimeModifier=60;
+    } else if ( waterLevel > waterConservationThresholdCM ) {    // No modification between conservation and critical values
+      if ( daysFromRain > daysNoRainThreshold ) {
+        wateringTimeModifier = wateringTimeModifier + daysNoRainThresholdPercent;
+      }
+      if ( maxAfternoonTemp > heatThreshold ) {
+        wateringTimeModifier = wateringTimeModifier + heatThresholdAdditionPercent;
+      }
+    }
+
+// Midnight (cleanup)
+    if ( datumCas.hour == 0 &&  datumCas.minute == 0 ) {
+      resetAfternoonTemp = 1;
+      if ( addDaysFromRain = 1 ) {
+        addDaysFromRain = 0;
+        daysFromRain++;
+      }
+    } else {
+      addDaysFromRain = 1;
+    }
+
+// Night 
+    if ( currentSec < morningSec || currentSec >= eveningSec ) {
+      setEvent ('N');
       blockerEnd = 0;
     }
 
@@ -343,11 +441,6 @@ void loop() {
       setBlocker (freezerSec);
     }
 
-// Night (clears blockers)
-    if ( currentSec < morningSec || currentSec >= eveningSec ) {
-      setEvent ('N');
-      blockerEnd = 0;
-    }
 
 // Empty
     if ( waterAmount == 0 ) {
@@ -358,12 +451,19 @@ void loop() {
 // Draining
     if ( drainer == 1 ) {
       setEvent('D');
+      daysFromRain = 0; // Assume it rained
+    }
+
+
+// Rain detected
+    if ( daysFromRain == 0 ) {
+      setEvent('R');
     }
 
 // Watering    
     for (int i = 0; i < scheduleRecords; i++) {
        scheduleSec=scheduleHour[i]*3600+scheduleMinute[i]*60+scheduleSecond[i];
-       if ( currentSec >= scheduleSec && currentSec < scheduleSec + scheduleLength [i]) {
+       if ( currentSec >= scheduleSec && currentSec < scheduleSec + scheduleLength[i]*wateringTimeModifier/100) {
          setEvent ('W');
        }
     }
@@ -374,6 +474,7 @@ void loop() {
     }
 
 // Idle - is set by default
+
 
 
 ////////////////////////////////////////////    
@@ -393,103 +494,79 @@ void loop() {
 // Print on display
 ////////////////////////////////////////////    
 
-    lcd.clear();
+//    lcd.clear();
     lcd.setCursor ( 0, 0 );
 
-    if ( currentSec % 6 < 2 ) {
-// Print status
-      if (datumCas.hour < 10) {   
-        lcd.print("0");
-      }
-      lcd.print(datumCas.hour);   lcd.print(":");
-      if (datumCas.minute < 10) {   
-        lcd.print("0");
-      }
-      lcd.print(datumCas.minute); lcd.print(":");
-      if (datumCas.second < 10) {   
-        lcd.print("0");
-      }
-      lcd.print(datumCas.second);
-      lcd.print (" V=");
-      lcd.print (waterAmount);
 
-      
-      lcd.print("L");
-      lcd.setCursor ( 0, 1 );
-      if ( eventBufferValue [topEvent] == 0 ) {
-        lcd.print("OFF - ");
-      } else {
-        lcd.print("ON - ");
-      }
+// Print status - First line - always the same
 
-      switch (eventBufferType[topEvent]) {
-        case 'D':
-          lcd.print("Draining.");
-          break;
+    if (datumCas.hour < 10) {   
+      lcd.print("0");
+    }
+    lcd.print(datumCas.hour);   lcd.print(":");
+    if (datumCas.minute < 10) {   
+      lcd.print("0");
+    }
+    lcd.print(datumCas.minute); lcd.print(":");
+    if (datumCas.second < 10) {   
+      lcd.print("0");
+    }
+    lcd.print(datumCas.second);
 
-        case 'E':
-          lcd.print("Empty.");
-          break;
 
-        case 'N':
-          lcd.print("Night.");
-          break;
-
-        case 'F':
-          lcd.print("Freezing.");
-          break;
-
-        case 'W':
-          lcd.print("Watering.");
-          break;
-
-        case 'B':
-          lcd.print("Blocked.");
-          break;
-
-        case 'I':
-          lcd.print("Idle.");
-          break;
-
-        default:
-          lcd.print("???.");
-          break;
-      }
-      
-    } else if ( currentSec % 6 < 4 ){
-// Print data      
-      lcd.print ("CM: ");
-      lcd.print(waterLevel);
-      lcd.print(" s:");
-      lcd.print(distanceAverage);
-
-      lcd.setCursor ( 0, 1 );
-      lcd.print ("T=");
-       if (currentTemp >= 0) {
-         lcd.print ("+");
-       } else {
-         lcd.print ("-");
-       }
-      lcd.print(currentTemp); lcd.print("C");
-      lcd.print(" ");
-      lcd.print(waterLevelPerc);
-      lcd.print("%");
-       
+    if (currentTemp >= 0) {
+      lcd.print (" +");
     } else {
-      lcd.print("Min: ");
+      lcd.print (" -");
+    }
+    lcd.print(currentTemp); 
+    lcd.print(degreeChar);
+    lcd.print("C ");
+
+    lcd.setCursor ( 15, 0 );
+    lcd.print(eventBufferType[topEvent]);
+    
+
+// Print status - Second line - Fixed part
+
+    lcd.setCursor ( 0, 1 );
+    lcd.print(waterLevel);
+    lcd.print ("cm  ");      
+    lcd.setCursor ( 6, 1 );
+    lcd.print ("- ");
+
+// Print status - Second line - variable part
+    
+    if ( currentSec % 10 < 2 ) {
       lcd.print(totalWaterDepth - (maxSAvg - zeroLevelDepth));
-      lcd.print("/");
-      lcd.print(maxSAvg);
-      lcd.print("/");
-      lcd.print(maxS);
-      lcd.setCursor ( 0, 1 );
-      lcd.print("Max: ");
+      lcd.print ("..");
       lcd.print(totalWaterDepth - (minSAvg - zeroLevelDepth));
-      lcd.print("/");
-      lcd.print(minSAvg);
-      lcd.print("/");
-      lcd.print(minS);
-      
+      lcd.print("      ");
+    } else if ( currentSec % 10 < 4 ) {
+      lcd.print ("V=");
+      lcd.print (waterAmount);
+      lcd.print ("Lt  ");
+    } else if ( currentSec % 10 < 6 ) {
+      lcd.print (waterLevelPerc);
+      lcd.print ("% Vol.");
+    } else if ( currentSec % 10 < 8 ) {
+      lcd.print ("Max");
+      if (maxAfternoonTemp >= 0) {
+        lcd.print ("+");
+      } else {
+        lcd.print ("-");
+      }
+      if ( maxAfternoonTemp == -100 ) {
+        lcd.print("??");
+      } else {
+        lcd.print (maxAfternoonTemp);
+      }
+      lcd.print(degreeChar);
+      lcd.print("C ");
+    } else {
+      lcd.print("Rain+");
+      lcd.print(daysFromRain);
+      lcd.print("   ");
     }
 
 ////////////////////////////////////////////    
@@ -497,9 +574,10 @@ void loop() {
 ////////////////////////////////////////////    
 
     if ( eventBufferValue [topEvent] == 0 ) {
-      digitalWrite(pinRele,HIGH);
+      digitalWrite(pinRele,HIGH);  // WATERING OFF
     } else {
-      digitalWrite(pinRele,LOW);
+      digitalWrite(pinRele,LOW);   // WATERING ON
+      lastWaterLevel = waterLevel;
     }
   }
   
