@@ -21,6 +21,10 @@
 #define maxVzdalenost 450
 #define errorStateMarginCM 10 //Unused so far
 
+#define scheduleRecords 3
+#define eventMaxRecords 20
+#define eventTypes 8
+
 // Water storager parameters
 #define zeroLevelDepth 35     // Vzdalenost sonaru od Max hladiny
 #define totalWaterDepth 140
@@ -41,10 +45,6 @@
 
 #define freezingTemp 0
 
-// Irigation schedule
-#define scheduleHour 22
-#define scheduleMinute 15
-#define scheduleSecond 0
 
 #define freezerSec 300
 
@@ -63,43 +63,144 @@ DS3231 rtc;
 // vytvoření proměnné pro práci s časem
 RTCDateTime datumCas;
 
-  long distanceReadings [measureBufferSize];
-  long sortedDistanceReadings [measureBufferSize];
-  long tempValue;
-  long distanceAverage;
-  int lastSecond = 0;
-  int arrayIndex = 0;
-  int lastState = 0;
-  int initCycle = displayLength;
-  int currentTemp;
-  char statusText;
-  int releMode;
-  long currentSec;
-  long stopSec;
-  int tempBlocker = 0;
-  int permBlocker = 0;
-  int drainer = 0;
-  long morningSec=static_cast<long>(morningHour)*3600+morningMinute*60+morningSecond;
-  long eveningSec=static_cast<long>(eveningHour)*3600+eveningMinute*60+eveningSecond;
-  long scheduleSec=static_cast<long>(scheduleHour)*3600+scheduleMinute*60+scheduleSecond;
-  long waterLevel;
-  long waterAmount;
-  long waterLevelPerc;
-  long blockerEnd;
+long distanceReadings [measureBufferSize];
+long sortedDistanceReadings [measureBufferSize];
+long tempValue;
+long distanceAverage;
+int lastSecond = 0;
+int arrayIndex = 0;
+int lastState = 0;
+int initCycle = displayLength;
+int currentTemp;
+//char statusText;
+//int releMode;
+int eventCounter = 0;
+int topEvent;
+int maxPriority;
+long currentSec;
+//long stopSec;
+//int tempBlocker = 0;
+//int permBlocker = 0;
+int drainer = 0;
+long morningSec=static_cast<long>(morningHour)*3600+morningMinute*60+morningSecond;
+long eveningSec=static_cast<long>(eveningHour)*3600+eveningMinute*60+eveningSecond;
+long scheduleSec;
+long waterLevel;
+long waterAmount;
+long waterLevelPerc;
+long blockerEnd;
 
-  long minS = 1000;
-  long maxS = 0;
+long minS = 1000;
+long maxS = 0;
 
-  long minSAvg = 1000;
-  long maxSAvg = 0;
+long minSAvg = 1000;
+long maxSAvg = 0;
 
-  
-  int blocker;
+// Irigation scheduler
+long scheduleHour [scheduleRecords];
+long scheduleMinute [scheduleRecords];
+long scheduleSecond [scheduleRecords];
+long scheduleLength [scheduleRecords];
+
+// Event buffer
+char eventBufferType [eventMaxRecords];
+int  eventBufferPriority [eventMaxRecords];
+int  eventBufferValue [eventMaxRecords];
+
+// Events buffer
+char eventType [eventMaxRecords];
+int  eventPriority [eventMaxRecords];
+int  eventValue [eventMaxRecords];
 
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 
 
+void setEvent(char event){
+  for (int i = 0; i < eventTypes; i++) {
+    if (eventType[i] == event) {
+      eventBufferType[eventCounter] = event;
+      eventBufferPriority [eventCounter] = eventPriority[i];
+      eventBufferValue [eventCounter] = eventValue[i];
+      eventCounter++;
+    }
+  }
+}
+
+
+void setBlocker(int blockerSec){
+  if ( blockerEnd < currentSec + blockerSec) {
+    blockerEnd = currentSec + blockerSec ;
+  }
+}
+
+
+
+
 void setup() {
+
+// Irigation schedule
+  scheduleHour[0] = 22;
+  scheduleMinute[0] = 15;
+  scheduleSecond[0] = 0;
+  scheduleLength[0] = 150;
+
+  scheduleHour[1] = 22;
+  scheduleMinute[1] = 0;
+  scheduleSecond[1] = 0;
+  scheduleLength[1] = 150;
+  
+  scheduleHour[2] = 6;
+  scheduleMinute[2] = 30;
+  scheduleSecond[2] = 0;
+  scheduleLength[2] = 120;
+
+
+// Event definitions
+
+
+// Event: Empty
+  eventType [0]= 'E';
+  eventPriority [0] = 110;
+  eventValue [0] = 0;
+
+// Event: Freezing
+  eventType [1]= 'F';
+  eventPriority [1] = 100;
+  eventValue [1] = 0;
+
+// Event: Night
+  eventType [2]= 'N';
+  eventPriority [2] = 90;
+  eventValue [2] = 0;
+
+// Event: Blocker
+  eventType [3]= 'B';
+  eventPriority [3] = 80;
+  eventValue [3] = 0;
+
+// Event: Manual
+  eventType [4]= 'M';
+  eventPriority [4] = 60;
+  eventValue [4] = 1;
+
+// Event: Drainer
+  eventType [5]= 'D';
+  eventPriority [5] = 50;
+  eventValue [5] = 1;
+
+// Event: Watering schedule
+  eventType [6]= 'W';
+  eventPriority [6] = 40;
+  eventValue [6] = 1;
+
+// Event: Idle
+  eventType [7]= 'I';
+  eventPriority [7] = 30;
+  eventValue [7] = 0;
+
+// Set default event Idle
+  setEvent ('I');
+  
   // zahájení komunikace po sériové lince
   // rychlostí 9600 baud
   Serial.begin(9600);
@@ -174,6 +275,7 @@ void loop() {
   if (datumCas.second != lastSecond) {
     lastSecond=datumCas.second;
     distanceAverage = 0;
+    eventCounter = 1;
     for (int i = 0; i < measureBufferSize; i++) {
       sortedDistanceReadings[i] = distanceReadings [i];
     }
@@ -217,6 +319,7 @@ void loop() {
       waterAmount = 0;
     }
     waterLevelPerc = static_cast<long> (waterLevel * 100 / totalWaterDepth ) ;
+
 ////////////////////////////////////////////    
 // Evaluate status
 ////////////////////////////////////////////    
@@ -229,58 +332,61 @@ void loop() {
       drainer = 1;
     }
 
-    if ( blocker == 1 && currentSec > blockerEnd ) {
-      blocker = 0;
+    if ( blockerEnd > 0 && currentSec > blockerEnd ) {
       blockerEnd = 0;
     }
 
 
 // Freezing
     if ( currentTemp < freezingTemp ) {
-      statusText = 'F';
-      releMode = 0;
-      blocker = 1;
-      if ( blockerEnd < currentSec + freezerSec) {
-        blockerEnd = currentSec + freezerSec ;
-      }
+      setEvent('F');
+      setBlocker (freezerSec);
+    }
 
-// Night
-    } else if ( currentSec < morningSec || currentSec >= eveningSec ) {
-      statusText = 'N';
-      releMode = 0;
-      blocker = 0;
+// Night (clears blockers)
+    if ( currentSec < morningSec || currentSec >= eveningSec ) {
+      setEvent ('N');
       blockerEnd = 0;
+    }
 
 // Empty
-    } else if ( waterAmount == 0 ) {      
-      statusText = 'E';
-      releMode = 0;
-      blocker = 1;
-      if ( blockerEnd < currentSec + freezerSec) {
-        blockerEnd = currentSec + freezerSec ;
-      }
+    if ( waterAmount == 0 ) {
+      setEvent ('E');
+      setBlocker (freezerSec);
+    }
 
 // Draining
-    } else if ( drainer == 1 ) {
-      statusText = 'D';
-      releMode = 1;
+    if ( drainer == 1 ) {
+      setEvent('D');
+    }
 
 // Watering    
-    } else if ( currentSec >= scheduleSec && currentSec < scheduleSec + scheduleLengthSec) {
-      statusText = 'W';
-      releMode = 1;
-
-// Idle
-    } else {
-      statusText = 'I';
-      releMode = 0;
+    for (int i = 0; i < scheduleRecords; i++) {
+       scheduleSec=scheduleHour[i]*3600+scheduleMinute[i]*60+scheduleSecond[i];
+       if ( currentSec >= scheduleSec && currentSec < scheduleSec + scheduleLength [i]) {
+         setEvent ('W');
+       }
     }
 
 // BLOCKER    
-    if (releMode == 1 && blocker == 1) {
-      statusText = 'B';
-      releMode = 0;
+    if (blockerEnd > 0) {
+      setEvent('B');
     }
+
+// Idle - is set by default
+
+
+////////////////////////////////////////////    
+// Find the event with the highest priority
+////////////////////////////////////////////    
+  maxPriority = 0;
+  for (int i = 0; i < eventCounter; i++) {
+    if (eventBufferPriority[i] > maxPriority) {
+      topEvent = i;
+      maxPriority = eventBufferPriority[i];
+    }
+  }
+
 
 
 ////////////////////////////////////////////    
@@ -310,13 +416,13 @@ void loop() {
       
       lcd.print("L");
       lcd.setCursor ( 0, 1 );
-      if ( releMode == 0 ) {
+      if ( eventBufferValue [topEvent] == 0 ) {
         lcd.print("OFF - ");
       } else {
         lcd.print("ON - ");
       }
 
-      switch (statusText) {
+      switch (eventBufferType[topEvent]) {
         case 'D':
           lcd.print("Draining.");
           break;
@@ -371,14 +477,14 @@ void loop() {
        
     } else {
       lcd.print("Min: ");
-      lcd.print(totalWaterDepth - (maxS - zeroLevelDepth));
+      lcd.print(totalWaterDepth - (maxSAvg - zeroLevelDepth));
       lcd.print("/");
       lcd.print(maxSAvg);
       lcd.print("/");
       lcd.print(maxS);
       lcd.setCursor ( 0, 1 );
       lcd.print("Max: ");
-      lcd.print(totalWaterDepth - (minS - zeroLevelDepth));
+      lcd.print(totalWaterDepth - (minSAvg - zeroLevelDepth));
       lcd.print("/");
       lcd.print(minSAvg);
       lcd.print("/");
@@ -390,7 +496,7 @@ void loop() {
 // Set the rele
 ////////////////////////////////////////////    
 
-    if ( releMode == 0 ) {
+    if ( eventBufferValue [topEvent] == 0 ) {
       digitalWrite(pinRele,HIGH);
     } else {
       digitalWrite(pinRele,LOW);
