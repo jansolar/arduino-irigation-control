@@ -1,10 +1,14 @@
-
 #include <NewPing.h>
 #include <Wire.h>
 #include <DS3231.h>
 #include <LiquidCrystal_I2C.h>
 #include "Adafruit_SHT4x.h"
  
+//Download: https://navody.dratek.cz/docs/texty/0/243/arduino_ds3231_master.zip
+//Download library Adafruit_SHT4x
+//Download library NewPing
+//Download library Arduino-LiquidCrystal-I2C-library-master
+
 
 
 // Define Sonar pins
@@ -32,8 +36,8 @@
 #define cmVolume 31.4159
 
 // Water draining parameters
-#define forcedDrainPercStart 90
-#define forcedDrainPercStop 80
+#define forcedDrainPercStart 96
+#define forcedDrainPercStop 95
 
 // Night
 #define morningHour 6
@@ -420,7 +424,7 @@ void loop() {
 // Midnight (cleanup)
     if ( datumCas.hour == 0 &&  datumCas.minute == 0 ) {
       resetAfternoonTemp = 1;
-      if ( addDaysFromRain = 1 ) {
+      if ( addDaysFromRain == 1 ) {
         addDaysFromRain = 0;
         daysFromRain++;
       }
