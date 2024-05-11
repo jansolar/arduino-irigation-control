@@ -23,17 +23,21 @@
 #define displayLength 16
 #define displayRows 2
 #define maxVzdalenost 450
-#define errorStateMarginCM 10 //Unused so far
+#define errorStateMarginCM 10 // Unused so far
+#define pumpLiterPerSecond 0.26   // volume output of the pump per second
+#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below than this
 
-#define scheduleRecords 3
-#define eventMaxRecords 20
-#define eventTypes 9
+
+#define scheduleRecords 3         // Size of the array of watering schedules
+#define eventMaxRecords 20        // Size of the array of observer events
+#define eventTypes 9              // Size of the array of event type
 
 // Water storager parameters
 #define zeroLevelDepth 35     // Vzdalenost sonaru od Max hladiny
 #define totalWaterDepth 140
 #define minWaterDepth 6
 #define cmVolume 31.4159
+
 
 // Water draining parameters
 #define forcedDrainPercStart 96
@@ -118,6 +122,9 @@ long waterAmount;
 long waterLevelPerc;
 long blockerEnd;
 long wateringTimeModifier;
+
+float estimatedWaterAmount = 0;
+long  estimatedWaterLevel = 0;
 
 
 long minS = 1000;
@@ -355,11 +362,17 @@ void loop() {
     currentTemp = static_cast<int>(temp.temperature);
     currentSec = static_cast<long>(datumCas.hour) * 3600 + datumCas.minute * 60 + datumCas.second;
     waterLevel = totalWaterDepth - (distanceAverage - zeroLevelDepth);
-    waterAmount = static_cast<int> (cmVolume * (waterLevel - minWaterDepth));
-    if ( waterAmount < 0 ) { 
+    if (waterLevel >= sensorMinReliableCM ) {
+      waterAmount = static_cast<int> (cmVolume * (waterLevel - minWaterDepth));
+      waterLevelPerc = static_cast<long> (waterLevel * 100 / totalWaterDepth ) ;
+      estimatedWaterAmount = static_cast<float> (waterAmount);
+    }  else {
+      estimatedWaterLevel = static_cast<long> (estimatedWaterAmount / cmVolume + minWaterDepth) ;
+      waterLevelPerc = static_cast<long> (estimatedWaterLevel * 100 / totalWaterDepth ) ;
+    }
+    if ( waterAmount < 0 ) {
       waterAmount = 0;
     }
-    waterLevelPerc = static_cast<long> (waterLevel * 100 / totalWaterDepth ) ;
 
 ////////////////////////////////////////////    
 // Evaluate status
@@ -547,19 +560,19 @@ void loop() {
 
 // Print status - Second line - variable part
     
-    if ( currentSec % 10 < 2 ) {
+    if ( currentSec % 12 < 2 ) {
       lcd.print(totalWaterDepth - (maxSAvg - zeroLevelDepth));
       lcd.print ("..");
       lcd.print(totalWaterDepth - (minSAvg - zeroLevelDepth));
       lcd.print("      ");
-    } else if ( currentSec % 10 < 4 ) {
+    } else if ( currentSec % 12 < 4 ) {
       lcd.print ("V=");
       lcd.print (waterAmount);
       lcd.print ("Lt  ");
-    } else if ( currentSec % 10 < 6 ) {
+    } else if ( currentSec % 12 < 6 ) {
       lcd.print (waterLevelPerc);
       lcd.print ("% Vol.");
-    } else if ( currentSec % 10 < 8 ) {
+    } else if ( currentSec % 12 < 8 ) {
       lcd.print ("Max");
       if (maxAfternoonTemp >= 0) {
         lcd.print ("+");
@@ -573,6 +586,10 @@ void loop() {
       }
       lcd.print(degreeChar);
       lcd.print("C ");
+    } else if ( currentSec % 12 < 10 ) {
+      lcd.print ( estimatedWaterLevel );
+      lcd.print ("/");
+      lcd.print ( estimatedWaterAmount );
     } else {
       lcd.print("Rain+");
       lcd.print(daysFromRain);
@@ -588,6 +605,10 @@ void loop() {
     } else {
       digitalWrite(pinRele,LOW);   // WATERING ON
       lastWaterLevel = waterLevel;
+      estimatedWaterAmount = estimatedWaterAmount - pumpLiterPerSecond;
+      if ( estimatedWaterAmount < 0 ) {
+        estimatedWaterAmount = 0;
+      }
     }
   }
   

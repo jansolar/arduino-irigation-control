@@ -16,6 +16,9 @@ Displays:
 175cm - Max+27°C  
 5---------------  
 175cm - Rain +??  
+
+
+Todo: Estimate water level from the watering time (below threshold)
   
 The latest commits add:
 * New displays
