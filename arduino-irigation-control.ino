@@ -37,7 +37,7 @@
 
 // Water draining parameters
 #define forcedDrainPercStart 96
-#define forcedDrainPercStop 95
+#define forcedDrainPercStop 94
 
 // Night
 #define morningHour 6
@@ -270,6 +270,12 @@ void setup() {
     Serial.println("Thermo found");
     delay(500);
   }
+  lcd.clear();
+
+  lcd.print("Pump test...");
+  digitalWrite(pinRele,LOW);   // WATERING ON
+  delay(2000);
+  digitalWrite(pinRele,HIGH);  // WATERING OFF
   lcd.clear();
 
   if (initCycle < measureBufferSize) {
