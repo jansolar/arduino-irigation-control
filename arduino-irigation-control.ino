@@ -25,7 +25,8 @@
 #define maxVzdalenost 450
 #define errorStateMarginCM 10 // Unused so far
 #define pumpLiterPerSecond 0.26   // volume output of the pump per second
-#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below than this
+//#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below than this
+#define sensorMinReliableCM 98    // do not trust the sensor when the water level is below than this
 
 
 #define scheduleRecords 3         // Size of the array of watering schedules
@@ -122,6 +123,9 @@ long waterAmount;
 long waterLevelPerc;
 long blockerEnd;
 long wateringTimeModifier;
+long lastDayWateringSeconds=0;
+long elapsedWateringSeconds=0;
+long resetWateringSeconds=1;
 
 float estimatedWaterAmount = 0;
 long  estimatedWaterLevel = 0;
@@ -366,6 +370,7 @@ void loop() {
       waterAmount = static_cast<int> (cmVolume * (waterLevel - minWaterDepth));
       waterLevelPerc = static_cast<long> (waterLevel * 100 / totalWaterDepth ) ;
       estimatedWaterAmount = static_cast<float> (waterAmount);
+      estimatedWaterLevel = waterLevel;
     }  else {
       estimatedWaterLevel = static_cast<long> (estimatedWaterAmount / cmVolume + minWaterDepth) ;
       waterLevelPerc = static_cast<long> (estimatedWaterLevel * 100 / totalWaterDepth ) ;
@@ -447,8 +452,14 @@ void loop() {
         addDaysFromRain = 0;
         daysFromRain++;
       }
+      if ( resetWateringSeconds == 1) {
+        resetWateringSeconds = 0;
+        lastDayWateringSeconds = elapsedWateringSeconds;
+        elapsedWateringSeconds = 0;
+      }
     } else {
       addDaysFromRain = 1;
+      resetWateringSeconds = 1;
     }
 
 // Night 
@@ -560,19 +571,19 @@ void loop() {
 
 // Print status - Second line - variable part
     
-    if ( currentSec % 12 < 2 ) {
+    if ( currentSec % 14 < 2 ) {
       lcd.print(totalWaterDepth - (maxSAvg - zeroLevelDepth));
       lcd.print ("..");
       lcd.print(totalWaterDepth - (minSAvg - zeroLevelDepth));
       lcd.print("      ");
-    } else if ( currentSec % 12 < 4 ) {
+    } else if ( currentSec % 14 < 4 ) {
       lcd.print ("V=");
       lcd.print (waterAmount);
       lcd.print ("Lt  ");
-    } else if ( currentSec % 12 < 6 ) {
+    } else if ( currentSec % 14 < 6 ) {
       lcd.print (waterLevelPerc);
       lcd.print ("% Vol.");
-    } else if ( currentSec % 12 < 8 ) {
+    } else if ( currentSec % 14 < 8 ) {
       lcd.print ("Max");
       if (maxAfternoonTemp >= 0) {
         lcd.print ("+");
@@ -586,7 +597,14 @@ void loop() {
       }
       lcd.print(degreeChar);
       lcd.print("C ");
-    } else if ( currentSec % 12 < 10 ) {
+    } else if ( currentSec % 14 < 10 ) {
+      //lcd.print ( estimatedWaterLevel );
+      //lcd.print ("/");
+      //lcd.print ( estimatedWaterAmount );
+      lcd.print("LW:");
+      lcd.print(lastDayWateringSeconds);
+      lcd.print("     ");
+    } else if ( currentSec % 14 < 12 ) {
       lcd.print ( estimatedWaterLevel );
       lcd.print ("/");
       lcd.print ( estimatedWaterAmount );
@@ -604,12 +622,14 @@ void loop() {
       digitalWrite(pinRele,HIGH);  // WATERING OFF
     } else {
       digitalWrite(pinRele,LOW);   // WATERING ON
+      elapsedWateringSeconds++;
       lastWaterLevel = waterLevel;
       estimatedWaterAmount = estimatedWaterAmount - pumpLiterPerSecond;
       if ( estimatedWaterAmount < 0 ) {
         estimatedWaterAmount = 0;
       }
     }
+
   }
   
   delay(sonarDelay);

@@ -16,6 +16,8 @@ Displays:
 175cm - Max+27°C  
 5---------------  
 175cm - Rain +??  
+6---------------  
+175cm - LW:12345
 
 
 Todo: Estimate water level from the watering time (below threshold)
