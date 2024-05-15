@@ -120,6 +120,7 @@ long scheduleSec;
 long waterLevel;
 long lastWaterLevel=-1;
 long waterAmount;
+long waterAmountMeasured;
 long waterLevelPerc;
 long blockerEnd;
 long wateringTimeModifier;
@@ -366,14 +367,17 @@ void loop() {
     currentTemp = static_cast<int>(temp.temperature);
     currentSec = static_cast<long>(datumCas.hour) * 3600 + datumCas.minute * 60 + datumCas.second;
     waterLevel = totalWaterDepth - (distanceAverage - zeroLevelDepth);
+    waterAmountMeasured = static_cast<long> (cmVolume * (waterLevel - minWaterDepth));
     if (waterLevel >= sensorMinReliableCM ) {
-      waterAmount = static_cast<int> (cmVolume * (waterLevel - minWaterDepth));
+      waterAmount = waterAmountMeasured;
       waterLevelPerc = static_cast<long> (waterLevel * 100 / totalWaterDepth ) ;
-      estimatedWaterAmount = static_cast<float> (waterAmount);
+      estimatedWaterAmount = static_cast<float> (waterAmountMeasured);
       estimatedWaterLevel = waterLevel;
     }  else {
       estimatedWaterLevel = static_cast<long> (estimatedWaterAmount / cmVolume + minWaterDepth) ;
       waterLevelPerc = static_cast<long> (estimatedWaterLevel * 100 / totalWaterDepth ) ;
+      waterAmount = waterAmountMeasured;
+      //waterAmount = static_cast<long> (estimatedWaterAmount);   // Change in the final version
     }
     if ( waterAmount < 0 ) {
       waterAmount = 0;
