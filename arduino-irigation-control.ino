@@ -24,9 +24,9 @@
 #define displayRows 2
 #define maxVzdalenost 450
 #define errorStateMarginCM 10 // Unused so far
-#define pumpLiterPerSecond 0.26   // volume output of the pump per second
+#define pumpLiterPerSecond 0.33   // volume output of the pump per second
 //#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below than this
-#define sensorMinReliableCM 98    // do not trust the sensor when the water level is below than this
+#define sensorMinReliableCM 82    // do not trust the sensor when the water level is below than this
 
 
 #define scheduleRecords 3         // Size of the array of watering schedules
