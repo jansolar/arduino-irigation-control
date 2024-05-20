@@ -26,7 +26,7 @@
 #define errorStateMarginCM 10 // Unused so far
 #define pumpLiterPerSecond 0.33   // volume output of the pump per second
 //#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below than this
-#define sensorMinReliableCM 82    // do not trust the sensor when the water level is below than this
+#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below than this
 
 
 #define scheduleRecords 3         // Size of the array of watering schedules
@@ -96,6 +96,7 @@ long distanceAverage;
 int lastSecond = 0;
 int arrayIndex = 0;
 int lastState = 0;
+int displayMod = 0;
 int initCycle = displayLength;
 int currentTemp;
 //char statusText;
@@ -118,6 +119,7 @@ long morningSec=static_cast<long>(morningHour)*3600+morningMinute*60+morningSeco
 long eveningSec=static_cast<long>(eveningHour)*3600+eveningMinute*60+eveningSecond;
 long scheduleSec;
 long waterLevel;
+long waterLevelMeasured;
 long lastWaterLevel=-1;
 long waterAmount;
 long waterAmountMeasured;
@@ -366,18 +368,20 @@ void loop() {
 
     currentTemp = static_cast<int>(temp.temperature);
     currentSec = static_cast<long>(datumCas.hour) * 3600 + datumCas.minute * 60 + datumCas.second;
-    waterLevel = totalWaterDepth - (distanceAverage - zeroLevelDepth);
-    waterAmountMeasured = static_cast<long> (cmVolume * (waterLevel - minWaterDepth));
-    if (waterLevel >= sensorMinReliableCM ) {
+    waterLevelMeasured = totalWaterDepth - (distanceAverage - zeroLevelDepth);
+    waterAmountMeasured = static_cast<long> (cmVolume * (waterLevelMeasured - minWaterDepth));
+    if (waterLevelMeasured >= sensorMinReliableCM ) {
+      waterLevel = waterLevelMeasured;
       waterAmount = waterAmountMeasured;
       waterLevelPerc = static_cast<long> (waterLevel * 100 / totalWaterDepth ) ;
       estimatedWaterAmount = static_cast<float> (waterAmountMeasured);
       estimatedWaterLevel = waterLevel;
     }  else {
       estimatedWaterLevel = static_cast<long> (estimatedWaterAmount / cmVolume + minWaterDepth) ;
+      waterLevel = estimatedWaterLevel;
       waterLevelPerc = static_cast<long> (estimatedWaterLevel * 100 / totalWaterDepth ) ;
-      waterAmount = waterAmountMeasured;
-      //waterAmount = static_cast<long> (estimatedWaterAmount);   // Change in the final version
+      //waterAmount = waterAmountMeasured;
+      waterAmount = static_cast<long> (estimatedWaterAmount);   // Change in the final version
     }
     if ( waterAmount < 0 ) {
       waterAmount = 0;
@@ -569,25 +573,31 @@ void loop() {
 
     lcd.setCursor ( 0, 1 );
     lcd.print(waterLevel);
-    lcd.print ("cm  ");      
+    if (waterLevelMeasured >= sensorMinReliableCM ) {
+      lcd.print ("cm  ");
+      displayMod = 12;
+    } else {
+      lcd.print ("cmE ");
+      displayMod = 14;
+    }
     lcd.setCursor ( 6, 1 );
     lcd.print ("- ");
 
 // Print status - Second line - variable part
     
-    if ( currentSec % 14 < 2 ) {
+    if ( currentSec % displayMod < 2 ) {
       lcd.print(totalWaterDepth - (maxSAvg - zeroLevelDepth));
       lcd.print ("..");
       lcd.print(totalWaterDepth - (minSAvg - zeroLevelDepth));
       lcd.print("      ");
-    } else if ( currentSec % 14 < 4 ) {
+    } else if ( currentSec % displayMod < 4 ) {
       lcd.print ("V=");
       lcd.print (waterAmount);
       lcd.print ("Lt  ");
-    } else if ( currentSec % 14 < 6 ) {
+    } else if ( currentSec % displayMod < 6 ) {
       lcd.print (waterLevelPerc);
       lcd.print ("% Vol.");
-    } else if ( currentSec % 14 < 8 ) {
+    } else if ( currentSec % displayMod < 8 ) {
       lcd.print ("Max");
       if (maxAfternoonTemp >= 0) {
         lcd.print ("+");
@@ -601,21 +611,22 @@ void loop() {
       }
       lcd.print(degreeChar);
       lcd.print("C ");
-    } else if ( currentSec % 14 < 10 ) {
+    } else if ( currentSec % displayMod < 10 ) {
       //lcd.print ( estimatedWaterLevel );
       //lcd.print ("/");
       //lcd.print ( estimatedWaterAmount );
       lcd.print("LW:");
       lcd.print(lastDayWateringSeconds);
       lcd.print("     ");
-    } else if ( currentSec % 14 < 12 ) {
-      lcd.print ( estimatedWaterLevel );
-      lcd.print ("/");
-      lcd.print ( estimatedWaterAmount );
-    } else {
+    } else if ( currentSec % displayMod < 12 ) {
       lcd.print("Rain+");
       lcd.print(daysFromRain);
       lcd.print("   ");
+    } else {
+      lcd.print ( "M:" );
+      lcd.print ("/");
+      lcd.print ( estimatedWaterLevel );
+      lcd.print ("cm    ");
     }
 
 ////////////////////////////////////////////    
