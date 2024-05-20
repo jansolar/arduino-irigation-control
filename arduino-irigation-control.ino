@@ -624,8 +624,7 @@ void loop() {
       lcd.print("   ");
     } else {
       lcd.print ( "M:" );
-      lcd.print ("/");
-      lcd.print ( estimatedWaterLevel );
+      lcd.print ( waterLevelMeasured );
       lcd.print ("cm    ");
     }
 
