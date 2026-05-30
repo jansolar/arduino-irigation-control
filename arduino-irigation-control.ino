@@ -25,8 +25,8 @@
 #define maxVzdalenost 450
 #define errorStateMarginCM 10 // Unused so far
 #define pumpLiterPerSecond 0.33   // volume output of the pump per second
-//#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below than this
-#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below than this
+//#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below this
+#define sensorMinReliableCM 90    // do not trust the sensor when the water level is below this
 
 
 #define scheduleRecords 3         // Size of the array of watering schedules
@@ -130,7 +130,7 @@ long lastDayWateringSeconds=0;
 long elapsedWateringSeconds=0;
 long resetWateringSeconds=1;
 
-float estimatedWaterAmount = 0;
+float estimatedWaterAmount = -1000;
 long  estimatedWaterLevel = 0;
 
 
@@ -370,7 +370,7 @@ void loop() {
     currentSec = static_cast<long>(datumCas.hour) * 3600 + datumCas.minute * 60 + datumCas.second;
     waterLevelMeasured = totalWaterDepth - (distanceAverage - zeroLevelDepth);
     waterAmountMeasured = static_cast<long> (cmVolume * (waterLevelMeasured - minWaterDepth));
-    if (waterLevelMeasured >= sensorMinReliableCM ) {
+    if (waterLevelMeasured >= sensorMinReliableCM || estimatedWaterAmount < 0) {
       waterLevel = waterLevelMeasured;
       waterAmount = waterAmountMeasured;
       waterLevelPerc = static_cast<long> (waterLevel * 100 / totalWaterDepth ) ;
