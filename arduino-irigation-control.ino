@@ -78,6 +78,11 @@
 #define rainDetectPersistSec 20  // require sustained rise before declaring rain
 #define maxLevelJumpCM 8         // ignore single-second spikes larger than this
 
+// RTC — uncomment SET_RTC_AT_STARTUP to write RTC on boot (upload once, then comment out again)
+//#define SET_RTC_AT_STARTUP
+// Optional fixed time (date still comes from compile date __DATE__):
+//#define RTC_SET_TIME "12:34:56"
+
 
 // inicializace měřícího modulu z knihovny PING
 NewPing sonar(pinTrigger, pinEcho, maxVzdalenost);
@@ -258,11 +263,14 @@ void setup() {
   Serial.begin(9600);
   // zahájení komunikace s RTC obvodem
   rtc.begin();
-  // nastavení času v RTC podle času kompilace programu,
-  // stačí nahrát jednou
-  //rtc.setDateTime(__DATE__, __TIME__);
-  // přímé nastavení času pro RTC
-  //rtc.setDateTime(__DATE__, "12:34:56");
+#ifdef SET_RTC_AT_STARTUP
+  #ifdef RTC_SET_TIME
+    rtc.setDateTime(__DATE__, RTC_SET_TIME);
+  #else
+    rtc.setDateTime(__DATE__, __TIME__);
+  #endif
+  Serial.println("RTC set at startup");
+#endif
 
   // Setup Digital pin output of RELAY
   pinMode(pinRele,OUTPUT); 
@@ -273,6 +281,23 @@ void setup() {
   // inicializace LCD
   lcd.begin();
   lcd.backlight();
+
+#ifdef SET_RTC_AT_STARTUP
+  datumCas = rtc.getDateTime();
+  lcd.setCursor(0, 0);
+  lcd.print("RTC updated");
+  lcd.setCursor(0, 1);
+  if (datumCas.hour < 10) lcd.print("0");
+  lcd.print(datumCas.hour);
+  lcd.print(":");
+  if (datumCas.minute < 10) lcd.print("0");
+  lcd.print(datumCas.minute);
+  lcd.print(":");
+  if (datumCas.second < 10) lcd.print("0");
+  lcd.print(datumCas.second);
+  delay(2000);
+  lcd.clear();
+#endif
 
   // inicializace THERMO
   lcd.setCursor ( 0, 0 );  
