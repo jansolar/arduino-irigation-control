@@ -25,8 +25,8 @@
 #define maxVzdalenost 450
 #define errorStateMarginCM 10 // Unused so far
 #define pumpLiterPerSecond 0.33   // volume output of the pump per second
-//#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below this
-#define sensorMinReliableCM 90    // do not trust the sensor when the water level is below this
+#define sensorMinReliableCM 60    // do not trust the sensor when the water level is below this
+//#define sensorMinReliableCM 90    // do not trust the sensor when the water level is below this
 
 
 #define scheduleRecords 3         // Size of the array of watering schedules
@@ -75,6 +75,8 @@
 #define scheduleLengthSec 300
 
 #define rainDetectCM 3
+#define rainDetectPersistSec 20  // require sustained rise before declaring rain
+#define maxLevelJumpCM 8         // ignore single-second spikes larger than this
 
 
 // inicializace měřícího modulu z knihovny PING
@@ -107,6 +109,7 @@ int maxAfternoonTemp = -100;
 int resetAfternoonTemp = 1;
 int addDaysFromRain = 1;
 int daysFromRain = -100;
+int rainDetectSec = 0;
 //int waterLevelAfterWatering = -100;
 int topEvent;
 int maxPriority;
@@ -422,12 +425,24 @@ void loop() {
       blockerEnd = 0;
     }
 
-// Rain detection
-    if (waterLevel < lastWaterLevel ) {
-      lastWaterLevel = waterLevel;
-    } else if ( waterLevel > lastWaterLevel + rainDetectCM) {
-      daysFromRain = 0;
-      lastWaterLevel=waterLevel;
+// Rain detection (ignore sonar spikes: reject large jumps, require sustained rise)
+    if ( waterLevelMeasured >= sensorMinReliableCM ) {
+      long levelDelta = waterLevel - lastWaterLevel;
+      if ( levelDelta < 0 ) {
+        lastWaterLevel = waterLevel;
+        rainDetectSec = 0;
+      } else if ( levelDelta > maxLevelJumpCM ) {
+        rainDetectSec = 0;
+      } else if ( levelDelta > rainDetectCM ) {
+        rainDetectSec++;
+        if ( rainDetectSec >= rainDetectPersistSec ) {
+          daysFromRain = 0;
+          lastWaterLevel = waterLevel;
+          rainDetectSec = 0;
+        }
+      } else {
+        rainDetectSec = 0;
+      }
     }
 
 // Afternoon (Find max afternoon temp)
